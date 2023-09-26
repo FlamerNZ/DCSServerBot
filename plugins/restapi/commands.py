@@ -86,13 +86,13 @@ class RestAPI(Plugin):
             try:
                 weather = server.current_mission.weather
                 temperature = weather['season']['temperature']
-                mmHg = weather['qnh']
-                ceiling = server.current_mission.clouds['preset']['readableName'][5:].split('\n')[0].replace('/', '/\n')
+                inHg = weather['qnh'] * 0.0393701
+                ceiling = weather['clouds']['base'] * 3.28084 + 0.5
                 visibility = weather['visibility']['distance']
             except:
                 weather = None
                 temperature = None
-                mmHg = None
+                inHg = None
                 ceiling = None
                 visibility = None
 
@@ -122,9 +122,10 @@ class RestAPI(Plugin):
                 "password": password,
                 "weather": {
                     "temperature": temperature,
-                    "mmHg": mmHg,
+                    "inHg": inHg,
                     "ceiling": ceiling,
-                    "visibility": visibility
+                    "visibility": visibility,
+                    "weather": weather
                 }
             }
             servers_data.append(server_data)
