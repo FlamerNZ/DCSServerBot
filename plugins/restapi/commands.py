@@ -81,6 +81,29 @@ class RestAPI(Plugin):
             current_mission = ""
             mission_time = ""
             password = ""
+
+            # Weather
+            try:
+                weather = server.current_mission.weather
+                temperature = weather['season']['temperature']
+                mmHg = weather['qnh']
+                ceiling = server.current_mission.clouds['preset']['readableName'][5:].split('\n')[0].replace('/', '/\n')
+                visibility = weather['visibility']['distance']
+            except:
+                weather = None
+                temperature = None
+                mmHg = None
+                ceiling = None
+                visibility = None
+
+            # Current mission
+            try:
+                current_map = f"{server.current_mission.map}"
+                mission_date = f"{server.current_mission.date}"
+            except:
+                current_map = None
+                mission_date = None
+
             if server.current_mission:
                 current_mission = f"{server.current_mission.name}"
                 mission_time = server.current_mission.mission_time
@@ -89,12 +112,20 @@ class RestAPI(Plugin):
             server_data = {
                 "server_name": server_name,
                 "server_status": server_status,
+                "current_map": current_map,
+                "mission_date": mission_date,
                 "active_players": active_players,
                 "max_players": max_players,
                 "ip_addr": ip_addr,
                 "current_mission": current_mission,
                 "mission_time": mission_time,
-                "password": password
+                "password": password,
+                "weather": {
+                    "temperature": temperature,
+                    "mmHg": mmHg,
+                    "ceiling": ceiling,
+                    "visibility": visibility
+                }
             }
             servers_data.append(server_data)
 
