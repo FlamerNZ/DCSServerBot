@@ -7,11 +7,13 @@ import uvicorn
 from contextlib import closing
 from core import Plugin, DEFAULT_TAG
 from datetime import datetime
-from fastapi import FastAPI, APIRouter, Form
+from fastapi import FastAPI, APIRouter, Form, Response
 from psycopg.rows import dict_row
 from services import DCSServerBot
 from typing import Optional
 from uvicorn import Config
+from core import const, report, Status, Server, utils, ServiceRegistry
+import json, sys
 
 app: Optional[FastAPI] = None
 
@@ -25,6 +27,7 @@ class RestAPI(Plugin):
         self.router = APIRouter()
         self.router.add_api_route("/topkills", self.topkills, methods=["GET"])
         self.router.add_api_route("/topkdr", self.topkdr, methods=["GET"])
+        self.router.add_api_route("/servers", self.servers, methods=["GET"])
         self.router.add_api_route("/getuser", self.getuser, methods=["POST"])
         self.router.add_api_route("/missilepk", self.missilepk, methods=["POST"])
         self.router.add_api_route("/stats", self.stats, methods=["POST"])
@@ -65,6 +68,42 @@ class RestAPI(Plugin):
                     WHERE s.player_ucid = p.ucid 
                     GROUP BY 1 ORDER BY 4 DESC LIMIT 10
                 """).fetchall()
+
+    def servers(self):
+        servers_data = []
+# get all servers, and their status, and add them to the servers_data list as JSON
+        for server in self.bot.servers.values():
+            server_name = f"{server.name}"
+            server_status = f"{server.status}"
+            active_players = f"{len(server.players) + 1}"
+            max_players = f"{server.settings['maxPlayers']}"
+            ip_addr = f"{server.node.public_ip}:{server.settings['port']}"
+            current_mission = ""
+            mission_time = ""
+            password = ""
+            if server.current_mission:
+                current_mission = f"{server.current_mission.name}"
+                mission_time = server.current_mission.mission_time
+            if server.settings['password']:
+                password = server.settings['password']
+            server_data = {
+                "server_name": server_name,
+                "server_status": server_status,
+                "active_players": active_players,
+                "max_players": max_players,
+                "ip_addr": ip_addr,
+                "current_mission": current_mission,
+                "mission_time": mission_time,
+                "password": password
+            }
+            servers_data.append(server_data)
+
+        # convert the list to a JSON array
+        servers_json = json.dumps(servers_data)
+
+        # return the JSON array as a string
+        return Response(content=servers_json, media_type="application/json")
+
 
     def getuser(self, nick: str = Form(default=None)):
         with self.pool.connection() as conn:
