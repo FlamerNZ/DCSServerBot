@@ -81,7 +81,8 @@ class RestAPI(Plugin):
             current_mission = ""
             mission_time = ""
             password = ""
-
+            server_display_name = server.display_name
+            server_maintenance = server.maintenance
             # Weather
             try:
                 weather = server.current_mission.weather
@@ -103,15 +104,19 @@ class RestAPI(Plugin):
                 password = server.settings['password']
             server_data = {
                 "server_name": server_name,
-                "server_status": server_status,
-                "current_map": current_map,
-                "mission_date": mission_date,
-                "active_players": active_players,
-                "max_players": max_players,
-                "ip_addr": ip_addr,
-                "current_mission": current_mission,
-                "mission_time": mission_time,
-                "password": password,
+                "data": {
+                    "server_display_name": server_display_name,
+                    "server_status": server_status,
+                    "current_map": current_map,
+                    "mission_date": mission_date,
+                    "active_players": active_players,
+                    "max_players": max_players,
+                    "ip_addr": ip_addr,
+                    "current_mission": current_mission,
+                    "mission_time": mission_time,
+                    "password": password,
+                    "server_maintenance": server_maintenance
+                },
                 "weather": weather
             }
             servers_data.append(server_data)
