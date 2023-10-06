@@ -6,6 +6,8 @@ import uuid
 from contextlib import suppress
 from pathlib import Path
 from core import utils
+from core.const import DEFAULT_TAG
+from core.services.registry import ServiceRegistry
 from dataclasses import dataclass, field
 from datetime import datetime
 from psutil import Process
@@ -13,20 +15,20 @@ from typing import Optional, Union, TYPE_CHECKING
 
 from .dataobject import DataObject
 from .const import Status, Coalition, Channel, Side
-from ..const import DEFAULT_TAG
-from ..services.registry import ServiceRegistry
 
 # ruamel YAML support
 from ruamel.yaml import YAML
 yaml = YAML()
 
 if TYPE_CHECKING:
-    from ..extension import Extension
+    from core.extension import Extension
     from .instance import Instance
     from .mission import Mission
     from .node import UploadStatus
     from .player import Player
     from services import ServiceBus
+
+__all__ = ["Server"]
 
 
 @dataclass
@@ -62,6 +64,8 @@ class Server(DataObject):
             if not data.get(self.name):
                 self.log.warning(f'No configuration found for server "{self.name}" in server.yaml!')
             self.locals = data.get(DEFAULT_TAG, {}) | data.get(self.name, {})
+            if 'message_ban' not in self.locals:
+                self.locals['message_ban'] = 'You are banned from this server. Reason: {}'
 
     @property
     def is_remote(self) -> bool:
@@ -208,12 +212,12 @@ class Server(DataObject):
     async def rename(self, new_name: str, update_settings: bool = False) -> None:
         # only the master can take care of a cluster-wide rename
         if self.node.master:
-            await self.node.rename(self, new_name, update_settings)
+            await self.node.rename_server(self, new_name, update_settings)
         else:
             await self.bus.send_to_node_sync({
                 "command": "rpc",
                 "service": "Node",
-                "method": "rename",
+                "method": "rename_server",
                 "params": {
                     "server": self.name,
                     "new_name": new_name,
@@ -314,7 +318,7 @@ class Server(DataObject):
         if self.status in [Status.PAUSED, Status.RUNNING] and self.mission_id == mission_id:
             raise AttributeError("Can't delete the running mission!")
         if self.status in [Status.STOPPED, Status.PAUSED, Status.RUNNING]:
-            self.send_to_dcs({"command": "deleteMission", "id": mission_id})
+            await self.send_to_dcs_sync({"command": "deleteMission", "id": mission_id})
         else:
             missions = self.settings['missionList']
             del missions[mission_id - 1]
@@ -368,4 +372,7 @@ class Server(DataObject):
             await self.wait_for_status_change([Status.STOPPED], timeout)
 
     async def init_extensions(self):
+        raise NotImplemented()
+
+    async def persist_settings(self):
         raise NotImplemented()

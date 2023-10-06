@@ -24,7 +24,8 @@ async def label_autocomplete(interaction: discord.Interaction, current: str) -> 
         config = interaction.client.cogs['Admin'].get_config(server)
         choices: list[app_commands.Choice[str]] = [
             app_commands.Choice(name=x['label'], value=x['label']) for x in config['downloads']
-            if not current or current.casefold() in x['label'].casefold()
+            if ((not current or current.casefold() in x['label'].casefold()) and
+                (not x.get('discord') or utils.check_roles(x['discord'], interaction.user)))
         ]
         return choices[:25]
     except Exception as ex:
@@ -96,7 +97,7 @@ class Admin(Plugin):
                 else:
                     ucid, name = self.bot.get_ucid_by_name(derived.user)
 
-                self.bus.ban(ucid, derived.reason.value, interaction.user.display_name, days)
+                self.bus.ban(ucid, interaction.user.display_name, derived.reason.value, days)
                 await interaction.response.send_message(f"Player {name} banned on all servers" +
                                                         (f" for {days} days." if days else ""))
                 await self.bot.audit(f'banned player {name} (ucid={ucid} with reason "{derived.reason.value}"' +
@@ -237,6 +238,7 @@ class Admin(Plugin):
             else:
                 await interaction.followup.send('File too large. You need a higher boost level for your server.',
                                                 ephemeral=True)
+                return
         elif target.startswith('<'):
             channel = self.bot.get_channel(int(target[4:-1]))
             try:
@@ -252,6 +254,7 @@ class Admin(Plugin):
             with open(os.path.expandvars(target), 'wb') as outfile:
                 outfile.write(file)
             await interaction.followup.send('File copied to the specified location.', ephemeral=True)
+        await self.bot.audit(f"downloaded {filename}", user=interaction.user, server=server)
 
     class CleanupView(View):
         def __init__(self):
@@ -263,13 +266,14 @@ class Admin(Plugin):
         @discord.ui.select(placeholder="What to be pruned?", options=[
             discord.SelectOption(label='Non-member users (unlinked)', value='non-members', default=True),
             discord.SelectOption(label='Members and non-members', value='users'),
-            discord.SelectOption(label='Data only (all users)', value='data')
+            discord.SelectOption(label='Data only (for all users)', value='data')
         ])
         async def set_what(self, interaction: discord.Interaction, select: Select):
             self.what = select.values[0]
             await interaction.response.defer()
 
         @discord.ui.select(placeholder="Which age to be pruned?", options=[
+            discord.SelectOption(label='Everything', value='0'),
             discord.SelectOption(label='Older than 90 days', value='90'),
             discord.SelectOption(label='Older than 180 days', value='180', default=True),
             discord.SelectOption(label='Older than 1 year', value='360 days')
@@ -438,16 +442,16 @@ class Admin(Plugin):
     @app_commands.autocomplete(name=utils.InstanceTransformer(unused=True).autocomplete)
     async def add_instance(self, interaction: discord.Interaction,
                            node: app_commands.Transform[Node, utils.NodeTransformer], name: str,
-                           template: Optional[app_commands.Transform[Instance, utils.InstanceTransformer]] = None):
+                           template: app_commands.Transform[Instance, utils.InstanceTransformer]):
         instance = await node.add_instance(name, template=template)
         if instance:
             await interaction.response.send_message(
                 f"""Instance {name} added to node {node.name}.
 Please make sure you forward the following ports:
 ```
-- DCS Port:\t\t\t{instance.dcs_port}
-- WebGUI Port:\t{instance.webgui_port}
-- VOIP Port:\t\t{instance.dcs_port + 1}
+- DCS Port:    {instance.dcs_port}
+- WebGUI Port: {instance.webgui_port}
+- VOIP Port:   {instance.dcs_port + 1}
 ```
             """, ephemeral=True)
             await self.bot.audit(f"added instance {instance.name} to node {node.name}.", user=interaction.user)
@@ -469,7 +473,7 @@ Please make sure you forward the following ports:
             await interaction.followup.send('Aborted.', ephemeral=True)
             return
         remove_files = await utils.yn_question(interaction,
-                                               f"Do you want to remove the directory {instance.home} from your disk?")
+                                               f"Do you want to remove the directory {instance.home}?")
         await node.delete_instance(instance, remove_files)
         await interaction.followup.send(f"Instance {instance.name} removed from node {node.name}.", ephemeral=True)
         await self.bot.audit(f"removed instance {instance.name} from node {node.name}.", user=interaction.user)

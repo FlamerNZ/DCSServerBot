@@ -7,6 +7,8 @@ from typing import Optional
 from core.autoexec import Autoexec
 from core.utils.helper import SettingsDict
 
+__all__ = ["InstanceImpl"]
+
 
 @dataclass
 @DataObjectFactory.register("Instance")
@@ -33,11 +35,15 @@ class InstanceImpl(Instance):
         return self._server
 
     @server.setter
-    def server(self, server: ServerImpl):
+    def server(self, server: Optional[ServerImpl]):
         if self._server and self._server.status not in [Status.UNREGISTERED, Status.SHUTDOWN]:
             raise InstanceBusyError()
         self._server = server
-        server.instance = self
+        if server:
+            server.instance = self
+            self.locals['server'] = server.name
+        else:
+            del self.locals['server']
 
     # TODO: check where to call this best
     def prepare(self):

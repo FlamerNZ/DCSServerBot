@@ -11,8 +11,8 @@ from _operator import attrgetter
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from copy import deepcopy
-from core import Server, DataObjectFactory, utils, Status, ServerImpl, Autoexec, ServerProxy, EventListener, \
-    InstanceProxy, NodeProxy, Mission, Node
+from core import Server, DataObjectFactory, Status, ServerImpl, Autoexec, ServerProxy, EventListener, \
+    InstanceProxy, NodeProxy, Mission, Node, utils
 from core.services.base import Service
 from core.services.registry import ServiceRegistry
 from datetime import datetime, timedelta, timezone
@@ -26,6 +26,10 @@ from typing import Tuple, Callable, Optional, cast, TYPE_CHECKING, Union
 
 if TYPE_CHECKING:
     from services import DCSServerBot
+
+__all__ = [
+    "ServiceBus"
+]
 
 
 @ServiceRegistry.register("ServiceBus")
@@ -482,6 +486,8 @@ class ServiceBus(Service):
             # servers will be passed by name
             if kwargs.get('server'):
                 kwargs['server'] = self.servers[kwargs['server']]
+            if kwargs.get('instance'):
+                kwargs['instance'] = next(x for x in self.node.instances if x.name == kwargs['instance'])
             if self.master:
                 if kwargs.get('member'):
                     kwargs['member'] = self.bot.guilds[0].get_member(int(kwargs['member'][2:-1]))

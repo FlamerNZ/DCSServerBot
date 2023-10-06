@@ -1,4 +1,6 @@
 import asyncio
+from contextlib import closing
+
 import discord
 import os
 import psycopg
@@ -29,8 +31,10 @@ class Mission(Plugin):
         self.update_channel_name.add_exception_type(AttributeError)
         self.update_channel_name.start()
         self.afk_check.start()
+        self.check_for_unban.start()
 
     async def cog_unload(self):
+        self.check_for_unban.cancel()
         self.afk_check.cancel()
         self.update_channel_name.cancel()
         await super().cog_unload()
@@ -38,9 +42,9 @@ class Mission(Plugin):
     def rename(self, conn: psycopg.Connection, old_name: str, new_name: str):
         conn.execute('UPDATE missions SET server_name = %s WHERE server_name = %s', (new_name, old_name))
 
-    async def prune(self, conn: psycopg.Connection, *, days: int = 0, ucids: list[str] = None):
+    async def prune(self, conn: psycopg.Connection, *, days: int = -1, ucids: list[str] = None):
         self.log.debug('Pruning Mission ...')
-        if days > 0:
+        if days > -1:
             conn.execute(f"DELETE FROM missions WHERE mission_end < (DATE(NOW()) - interval '{days} days')")
         self.log.debug('Mission pruned.')
 
@@ -120,7 +124,7 @@ class Mission(Plugin):
     async def restart(self, interaction: discord.Interaction,
                       server: app_commands.Transform[Server, utils.ServerTransformer(
                           status=[Status.RUNNING, Status.PAUSED, Status.STOPPED])],
-                      delay: Optional[int] = 120, reason: Optional[str] = None):
+                      delay: Optional[int] = 120, reason: Optional[str] = None, run_extensions: Optional[bool] = False):
         if server.status not in [Status.RUNNING, Status.PAUSED, Status.STOPPED]:
             await interaction.response.send_message(
                 f"Can't restart server {server.name} as it is {server.status.name}!", ephemeral=True)
@@ -161,11 +165,10 @@ class Mission(Plugin):
             await msg.delete()
 
         msg = await interaction.followup.send('Mission will restart now, please wait ...', ephemeral=True)
-        if server.current_mission:
-            await server.current_mission.restart()
+        if run_extensions:
+            await server.restart(smooth=await server.apply_mission_changes())
         else:
-            await server.stop()
-            await server.start()
+            await server.restart()
         await self.bot.audit("restarted mission", server=server, user=interaction.user)
         await msg.delete()
         await interaction.followup.send('Mission restarted.', ephemeral=True)
@@ -178,7 +181,7 @@ class Mission(Plugin):
     async def load(self, interaction: discord.Interaction,
                    server: app_commands.Transform[Server, utils.ServerTransformer(
                        status=[Status.STOPPED, Status.RUNNING, Status.PAUSED])],
-                   mission_id: int):
+                   mission_id: int, run_extensions: Optional[bool] = False):
         if server.status not in [Status.RUNNING, Status.PAUSED, Status.STOPPED]:
             await interaction.response.send_message(
                 f"Can't load mission on server {server.name} as it is {server.status.name}!", ephemeral=True)
@@ -208,7 +211,10 @@ class Mission(Plugin):
                 await interaction.followup.send(f'Mission {server.current_mission.display_name} will be restarted '
                                                 f'when server is empty.', ephemeral=True)
             else:
-                await server.current_mission.restart()
+                if run_extensions:
+                    await server.restart(smooth=await server.apply_mission_changes())
+                else:
+                    await server.restart()
                 await interaction.followup.send(f'Mission {server.current_mission.display_name} restarted.',
                                                 ephemeral=True)
         else:
@@ -224,6 +230,8 @@ class Mission(Plugin):
                                                       ephemeral=True)
                 try:
                     await server.loadMission(mission_id + 1)
+                    if run_extensions:
+                        await server.restart(smooth=await server.apply_mission_changes())
                     await self.bot.audit("loaded mission", server=server, user=interaction.user)
                     await interaction.followup.send(f'Mission {name} loaded.', ephemeral=True)
                 except asyncio.TimeoutError:
@@ -428,10 +436,9 @@ class Mission(Plugin):
     @utils.app_has_role('DCS')
     async def _list(self, interaction: discord.Interaction,
                     server: app_commands.Transform[Server, utils.ServerTransformer(status=[Status.RUNNING])]):
-        timeout = self.bot.locals.get('message_autodelete', 300)
         report = Report(self.bot, self.plugin_name, 'players.json')
-        env = await report.render(server=server, sides=utils.get_sides(interaction, server))
-        await interaction.response.send_message(embed=env.embed, delete_after=timeout if timeout > 0 else None)
+        env = await report.render(server=server, sides=utils.get_sides(interaction.client, interaction, server))
+        await interaction.response.send_message(embed=env.embed, ephemeral=True)
 
     @player.command(description='Kicks a player by name or UCID')
     @app_commands.guild_only()
@@ -466,7 +473,7 @@ class Mission(Plugin):
                     days = int(derived.period.value)
                 else:
                     days = None
-                self.bus.ban(derived.player.ucid, derived.reason.value, interaction.user.display_name, days)
+                self.bus.ban(derived.player.ucid, interaction.user.display_name, derived.reason.value, days)
                 await interaction.response.send_message(f"Player {player.display_name} banned on all servers " +
                                                         (f"for {days} days." if days else ""))
                 await self.bot.audit(f'banned player {player.display_name} with reason "{derived.reason.value}"' +
@@ -543,6 +550,26 @@ class Mission(Plugin):
         player.sendChatMessage(message, interaction.user.display_name)
         await interaction.response.send_message('Message sent.')
 
+    @tasks.loop(minutes=1.0)
+    async def check_for_unban(self):
+        with self.pool.connection() as conn:
+            with conn.transaction():
+                # migrate active bans from the punishment system and migrate them to the new method (fix days only)
+                for row in conn.execute("""SELECT ucid FROM bans WHERE banned_until < NOW()""").fetchall():
+                    for server in self.bot.servers.values():
+                        if server.status not in [Status.PAUSED, Status.RUNNING, Status.STOPPED]:
+                            continue
+                        server.send_to_dcs({
+                            "command": "unban",
+                            "ucid": row[0]
+                        })
+                # delete unbanned accounts from the database
+                conn.execute("DELETE FROM bans WHERE banned_until < (NOW() - interval '1 minutes')")
+
+    @check_for_unban.before_loop
+    async def before_check_unban(self):
+        await self.bot.wait_until_ready()
+
     @tasks.loop(minutes=5.0)
     async def update_channel_name(self):
         for server_name, server in self.bot.servers.items():
@@ -581,6 +608,9 @@ class Mission(Plugin):
                     continue
                 for ucid, dt in server.afk.items():
                     player = server.get_player(ucid=ucid, active=True)
+                    # don't kick DCS Admin or GameMaster users
+                    if player.has_discord_roles(['DCS Admin', 'GameMaster']):
+                        continue
                     if player and (datetime.now() - dt).total_seconds() > max_time:
                         msg = self.get_config(server).get(
                             'message_afk', '{player.name}, you have been kicked for being AFK for '
@@ -618,8 +648,7 @@ class Mission(Plugin):
         try:
             rc = await server.uploadMission(att.filename, att.url)
             if rc == UploadStatus.FILE_IN_USE:
-                if not await utils.yn_question(message.interaction,
-                                               'A mission is currently active.\n'
+                if not await utils.yn_question(ctx, 'A mission is currently active.\n'
                                                'Do you want me to stop the DCS-server to replace it?'):
                     await message.channel.send('Upload aborted.')
                     return
@@ -630,7 +659,7 @@ class Mission(Plugin):
             if rc != UploadStatus.OK:
                 await server.uploadMission(att.filename, att.url, force=True)
 
-            filename = os.path.join(await server.get_missions_dir(), att.filename)
+            filename = os.path.normpath(os.path.join(await server.get_missions_dir(), att.filename))
             name = os.path.basename(att.filename)[:-4]
             if not server.locals.get('autoscan', False):
                 await server.addMission(filename)

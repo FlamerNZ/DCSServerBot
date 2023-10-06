@@ -11,7 +11,7 @@ from contextlib import closing
 from copy import deepcopy
 from core import utils
 from core.services.registry import ServiceRegistry
-from discord import app_commands, Interaction, AppCommandType
+from discord import app_commands, Interaction
 from discord.app_commands import locale_str
 from discord.app_commands.commands import CommandCallback, GroupT, P, T
 from discord.ext import commands, tasks
@@ -32,6 +32,19 @@ if TYPE_CHECKING:
     from services import DCSServerBot, ServiceBus
 
 BACKUP_FOLDER = f'config/backup/{platform.node()}'
+
+__all__ = [
+    "BACKUP_FOLDER",
+    "command",
+    "Command",
+    "Group",
+    "Plugin",
+    "PluginError",
+    "PluginConflictError",
+    "PluginRequiredError",
+    "PluginConfigurationError",
+    "PluginInstallationError"
+]
 
 
 def command(
@@ -213,7 +226,7 @@ class Plugin(commands.Cog):
         self.loop = self.bot.loop
         self.locals = self.read_locals()
         if self.plugin_name != 'commands' and 'commands' in self.locals:
-            self.change_commands(self.locals['commands'], {x.name: x for x in self.get_app_commands()})
+            self._change_commands(self.locals['commands'], {x.name: x for x in self.get_app_commands()})
         self._config = dict[str, dict]()
         self.eventlistener: Type[TEventListener] = eventlistener(self) if eventlistener else None
         self.wait_for_on_ready.start()
@@ -224,7 +237,7 @@ class Plugin(commands.Cog):
             self.bus.register_eventListener(self.eventlistener)
         self.log.info(f'  => {self.plugin_name.title()} loaded.')
 
-    async def cog_unload(self):
+    async def cog_unload(self) -> None:
         if self.eventlistener:
             await self.eventlistener.shutdown()
             self.bus.unregister_eventListener(self.eventlistener)
@@ -232,7 +245,7 @@ class Plugin(commands.Cog):
         self._config.clear()
         self.log.info(f'  => {self.plugin_name.title()} unloaded.')
 
-    def change_commands(self, cmds: dict, all_cmds: dict, group: app_commands.commands.Group = None) -> None:
+    def _change_commands(self, cmds: dict, all_cmds: dict, group: app_commands.commands.Group = None) -> None:
         for name, params in cmds.items():
             for cmd_name, cmd in self.__dict__.copy().items():
                 if cmd_name == name and isinstance(cmd, Command):
@@ -255,8 +268,8 @@ class Plugin(commands.Cog):
                     if cmd.parent:
                         cmd.parent.add_command(cmd)
 
-    async def install(self):
-        self.init_db()
+    async def install(self) -> None:
+        self._init_db()
         # create report directories for convenience
         source_path = f'./plugins/{self.plugin_name}/reports'
         if path.exists(source_path):
@@ -273,10 +286,10 @@ class Plugin(commands.Cog):
     async def after_dcs_update(self) -> None:
         pass
 
-    async def prune(self, conn: psycopg.Connection, *, days: int = 0, ucids: list[str] = None) -> None:
+    async def prune(self, conn: psycopg.Connection, *, days: int = -1, ucids: list[str] = None) -> None:
         pass
 
-    def init_db(self) -> None:
+    def _init_db(self) -> None:
         with self.pool.connection() as conn:
             with conn.transaction():
                 with closing(conn.cursor()) as cursor:
@@ -362,6 +375,7 @@ class Plugin(commands.Cog):
 
     # get default and specific configs to be merged in derived implementations
     def get_base_config(self, server: Server) -> Tuple[Optional[dict], Optional[dict]]:
+        # TODO: what happens if the mission wasn't loaded yet
         def filter_element(element: dict) -> dict:
             full = deepcopy(element)
             if 'terrains' in element:
@@ -373,7 +387,7 @@ class Plugin(commands.Cog):
             elif 'missions' in element:
                 del full['missions']
                 for mission in element['missions'].keys():
-                    if server.current_mission.map.casefold() == mission.casefold():
+                    if server.current_mission.name.casefold() == mission.casefold():
                         return full | element['missions'][mission]
                 return full
             else:
@@ -401,7 +415,7 @@ class Plugin(commands.Cog):
         # this function has to be implemented in your own plugins, if a server rename takes place
         pass
 
-    async def on_ready(self):
+    async def on_ready(self) -> None:
         pass
 
     @tasks.loop(count=1, reconnect=True)

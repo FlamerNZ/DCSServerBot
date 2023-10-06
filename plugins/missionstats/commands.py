@@ -11,12 +11,12 @@ from .listener import MissionStatisticsEventListener
 
 class MissionStatistics(Plugin):
 
-    async def prune(self, conn, *, days: int = 0, ucids: list[str] = None):
+    async def prune(self, conn, *, days: int = -1, ucids: list[str] = None):
         self.log.debug('Pruning Missionstats ...')
         if ucids:
             for ucid in ucids:
                 conn.execute('DELETE FROM missionstats WHERE init_id = %s', (ucid,))
-        elif days > 0:
+        elif days > -1:
             conn.execute(f"DELETE FROM missionstats WHERE time < (DATE(NOW()) - interval '{days} days')")
         self.log.debug('Missionstats pruned.')
 
@@ -33,7 +33,7 @@ class MissionStatistics(Plugin):
         stats = self.bot.mission_stats[server.name]
         report = Report(self.bot, self.plugin_name, 'missionstats.json')
         env = await report.render(stats=stats, mission_id=server.mission_id,
-                                  sides=utils.get_sides(interaction, server))
+                                  sides=utils.get_sides(interaction.client, interaction, server))
         await interaction.response.send_message(embed=env.embed, ephemeral=True)
 
     @command(description='Display statistics about sorties')

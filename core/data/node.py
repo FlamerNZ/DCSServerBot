@@ -9,6 +9,11 @@ from .server import Server
 from ruamel.yaml import YAML
 yaml = YAML()
 
+__all__ = [
+    "Node",
+    "UploadStatus"
+]
+
 
 class UploadStatus(Enum):
     OK = auto()
@@ -65,9 +70,6 @@ class Node:
                                                               'of the multiplayer selection list to an individual one!')
         config['messages']['player_banned'] = config['messages'].get('player_banned', 'You are banned from this '
                                                                                       'server. Reason: {}')
-        config['messages']['player_afk'] = config['messages'].get('player_afk',
-                                                                  '{player.name}, you have been kicked for being AFK '
-                                                                  'for more than {time}.')
         return config
 
     def read_locals(self) -> dict:
@@ -100,7 +102,7 @@ class Node:
     async def list_directory(self, path: str, pattern: str) -> list[str]:
         raise NotImplemented()
 
-    def rename(self, server: Server, new_name: str, update_settings: Optional[bool] = False):
+    async def rename_server(self, server: Server, new_name: str, update_settings: Optional[bool] = False):
         raise NotImplemented()
 
     async def add_instance(self, name: str, *, template: Optional[Instance] = None) -> Instance:
@@ -113,4 +115,10 @@ class Node:
         raise NotImplemented()
 
     async def find_all_instances(self) -> list[Tuple[str, str]]:
+        raise NotImplemented()
+
+    async def migrate_server(self, server: Server, instance: Instance) -> None:
+        raise NotImplemented()
+
+    async def unregister_server(self, server: Server) -> None:
         raise NotImplemented()

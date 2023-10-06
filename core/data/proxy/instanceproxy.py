@@ -6,6 +6,8 @@ from typing import Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from core import ServerProxy
 
+__all__ = ["InstanceProxy"]
+
 
 @dataclass
 class InstanceProxy(Instance):
@@ -16,5 +18,5 @@ class InstanceProxy(Instance):
         return self._server
 
     @server.setter
-    def server(self, server: ServerProxy):
+    def server(self, server: Optional[ServerProxy]):
         self._server = server

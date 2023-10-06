@@ -50,12 +50,12 @@ class GreenieBoard(Plugin):
             self._config[server.instance.name] = default | specific
         return self._config[server.instance.name]
 
-    async def prune(self, conn, *, days: int = 0, ucids: list[str] = None):
+    async def prune(self, conn, *, days: int = -1, ucids: list[str] = None):
         self.log.debug('Pruning Greenieboard ...')
         if ucids:
             for ucid in ucids:
                 conn.execute('DELETE FROM greenieboard WHERE player_ucid = %s', (ucid,))
-        elif days > 0:
+        elif days > -1:
             conn.execute(f"DELETE FROM greenieboard WHERE time < (DATE(NOW()) - interval '{days} days')")
         self.log.debug('Greenieboard pruned.')
 
@@ -66,10 +66,12 @@ class GreenieBoard(Plugin):
     @app_commands.guild_only()
     @utils.app_has_role('DCS')
     async def info(self, interaction: discord.Interaction,
-                   user: app_commands.Transform[Union[str, discord.Member], utils.UserTransformer]):
+                   user: Optional[app_commands.Transform[Union[str, discord.Member], utils.UserTransformer]]):
         def format_landing(landing: dict) -> str:
             return f"{landing['time']:%y-%m-%d %H:%M:%S} - {landing['unit_type']}@{landing['place']}: {landing['grade']}"
 
+        if not user:
+            user = interaction.user
         if isinstance(user, str):
             ucid = user
             user = self.bot.get_member_or_name_by_ucid(ucid)

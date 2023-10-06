@@ -1,6 +1,7 @@
 import asyncio
 import os
 import re
+import shutil
 import sys
 import time
 if sys.platform == 'win32':
@@ -26,12 +27,12 @@ class Tacview(Extension):
 
     async def startup(self) -> bool:
         await super().startup()
-        if self.config.get('channel'):
+        if self.config.get('target'):
             self.check_log.start()
         return True
 
     async def shutdown(self) -> bool:
-        if self.locals.get('channel'):
+        if self.locals.get('target'):
             self.check_log.cancel()
         return await super().shutdown()
 
@@ -66,8 +67,7 @@ class Tacview(Extension):
         options = self.server.options['plugins']
         if 'tacviewExportPath' in self.config:
             path = os.path.normpath(os.path.expandvars(self.config['tacviewExportPath']))
-            if path != TACVIEW_DEFAULT_DIR and ('tacviewExportPath' not in options['Tacview'] or
-                                                os.path.normpath(options['Tacview']['tacviewExportPath']) != path):
+            if options['Tacview'].get('tacviewExportPath', TACVIEW_DEFAULT_DIR) != path:
                 options['Tacview']['tacviewExportPath'] = path
                 dirty = True
                 if not os.path.exists(path):
@@ -208,27 +208,35 @@ class Tacview(Extension):
         # wait 60s for the file to appear
         for i in range(0, 60):
             if os.path.exists(filename):
-                if os.path.getsize(filename) > 25 * 1024 * 1024:
-                    self.log.warning(f"Can't upload, TACVIEW file {filename} too large!")
+                target = self.config['target']
+                if target.startswith('<'):
+                    if os.path.getsize(filename) > 25 * 1024 * 1024:
+                        self.log.warning(f"Can't upload, TACVIEW file {filename} too large!")
+                        return
+                    try:
+                        await self.bus.send_to_node_sync({
+                            "command": "rpc",
+                            "service": "Bot",
+                            "method": "send_message",
+                            "params": {
+                                "channel": int(target[4:-1]),
+                                "content": f"Tacview file for server {self.server.name}",
+                                "server": self.server.name,
+                                "filename": filename
+                            }
+                        })
+                    except AttributeError:
+                        self.log.warning(f"Can't upload TACVIEW file {filename}, "
+                                         f"channel {target[4:-1]} incorrect!")
+                    except Exception as ex:
+                        self.log.warning(f"Can't upload, TACVIEW file {filename}: {ex}!")
                     return
-                try:
-                    await self.bus.send_to_node_sync({
-                        "command": "rpc",
-                        "service": "Bot",
-                        "method": "send_message",
-                        "params": {
-                            "channel": self.config.get('channel'),
-                            "content": f"Tacview file for server {self.server.name}",
-                            "server": self.server.name,
-                            "filename": filename
-                        }
-                    })
-                except AttributeError:
-                    self.log.warning(f"Can't upload TACVIEW file {filename}, "
-                                     f"channel {self.config.get('channel')} incorrect!")
-                except Exception as ex:
-                    self.log.warning(f"Can't upload, TACVIEW file {filename}: {ex}!")
-                return
+                else:
+                    try:
+                        shutil.copy2(filename, os.path.expandvars(utils.format_string(target, server=self.server)))
+                    except Exception as ex:
+                        self.log.warning(f"Can't upload TACVIEW file {filename} to {target}: ", exc_info=ex)
+                    return
             await asyncio.sleep(1)
         else:
             self.log.warning(f"Can't find TACVIEW file {filename} after 1 min of waiting.")

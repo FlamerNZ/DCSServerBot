@@ -1,6 +1,7 @@
 import os
 
-from core import ServiceRegistry, Instance
+from core import Instance, Server
+from core.services.registry import ServiceRegistry
 from core.data.node import Node, UploadStatus
 from core.data.proxy.instanceproxy import InstanceProxy
 from pathlib import Path
@@ -9,6 +10,8 @@ from typing import Any, Union, Optional, Tuple
 # ruamel YAML support
 from ruamel.yaml import YAML
 yaml = YAML()
+
+__all__ = ["NodeProxy"]
 
 
 class NodeProxy(Node):
@@ -148,6 +151,19 @@ class NodeProxy(Node):
         }, node=self.name)
         return data['return']
 
+    async def rename_server(self, server: Server, new_name: str, update_settings: Optional[bool] = False):
+        await self.bus.send_to_node_sync({
+            "command": "rpc",
+            "object": "Node",
+            "method": "rename_server",
+            "params": {
+                "server": server.name,
+                "new_name": new_name,
+                "update_settings": update_settings
+            }
+        }, node=self.name)
+
+
     async def add_instance(self, name: str, *, template: Optional[Instance] = None) -> Instance:
         data = await self.bus.send_to_node_sync({
             "command": "rpc",
@@ -189,3 +205,24 @@ class NodeProxy(Node):
             "method": "find_all_instances"
         }, node=self.name)
         return data['return']
+
+    async def migrate_server(self, server: Server, instance: Instance):
+        await self.bus.send_to_node_sync({
+            "command": "rpc",
+            "object": "Node",
+            "method": "migrate_server",
+            "params": {
+                "server": server.name,
+                "instance": instance.name
+            }
+        }, node=self.name)
+
+    async def unregister_server(self, server: Server) -> None:
+        await self.bus.send_to_node_sync({
+            "command": "rpc",
+            "object": "Node",
+            "method": "unregister_server",
+            "params": {
+                "server": server.name
+            }
+        }, node=self.name)

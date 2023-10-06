@@ -10,7 +10,12 @@ import subprocess
 
 from contextlib import suppress
 from copy import deepcopy
-from core import utils, Server, DEFAULT_TAG
+from core import utils, Server
+from core.const import DEFAULT_TAG
+from core.data.dataobject import DataObjectFactory
+from core.data.const import Status
+from core.mizfile import MizFile
+from core.data.node import UploadStatus
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -20,10 +25,6 @@ from typing import Optional, TYPE_CHECKING, Union
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileSystemEvent, FileSystemMovedEvent
 
-from core.data.dataobject import DataObjectFactory
-from core.data.const import Status
-from core.mizfile import MizFile
-from core.data.node import UploadStatus
 
 # ruamel YAML support
 from ruamel.yaml import YAML
@@ -32,6 +33,8 @@ yaml = YAML()
 if TYPE_CHECKING:
     from core import Extension, InstanceImpl
     from services import DCSServerBot
+
+__all__ = ["ServerImpl"]
 
 
 class MissionFileSystemEventHandler(FileSystemEventHandler):
@@ -104,7 +107,9 @@ class ServerImpl(Server):
             path = os.path.join(self.instance.home, 'Config', 'serverSettings.lua')
             self._settings = utils.SettingsDict(self, path, 'cfg')
             # if someone managed to destroy the mission list, fix it...
-            if isinstance(self._settings['missionList'], dict):
+            if 'missionList' not in self._settings:
+                self._settings['missionList'] = []
+            elif isinstance(self._settings['missionList'], dict):
                 self._settings['missionList'] = list(self._settings['missionList'].values())
         return self._settings
 
@@ -464,3 +469,22 @@ class ServerImpl(Server):
         new_filename = utils.create_writable_mission(filename)
         miz.save(new_filename)
         return new_filename
+
+    async def persist_settings(self):
+        with open('config/servers.yaml') as infile:
+            config = yaml.load(infile)
+        config[self.name]['serverSettings'] = {
+            "description": self.settings['description'],
+            "advanced": self.settings['advanced'],
+            "mode": self.settings['mode'],
+            "isPublic": self.settings['isPublic'],
+            "name": self.name,
+            "password": self.settings['password'],
+            "require_pure_textures": self.settings['require_pure_textures'],
+            "require_pure_scripts": self.settings['require_pure_scripts'],
+            "require_pure_clients": self.settings['require_pure_clients'],
+            "require_pure_models": self.settings['require_pure_models'],
+            "maxPlayers": self.settings['maxPlayers']
+        }
+        with open('config/servers.yaml', 'w') as outfile:
+            yaml.dump(config, outfile)

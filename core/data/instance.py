@@ -10,6 +10,11 @@ from ..const import SAVED_GAMES
 if TYPE_CHECKING:
     from core import Server
 
+__all__ = [
+    "Instance",
+    "InstanceBusyError"
+]
+
 
 class InstanceBusyError(Exception):
     def __init__(self):
@@ -61,7 +66,7 @@ class Instance(DataObject):
         raise NotImplemented()
 
     @server.setter
-    def server(self, server: Server):
+    def server(self, server: Optional[Server]):
         raise NotImplemented()
 
     def prepare(self):
