@@ -5,7 +5,7 @@ import shutil
 import uvicorn
 
 from contextlib import closing
-from core import Plugin, DEFAULT_TAG
+from core import Plugin, DCSServerBot
 from datetime import datetime
 from fastapi import FastAPI, APIRouter, Form, Response
 from psycopg.rows import dict_row
@@ -32,7 +32,7 @@ class RestAPI(Plugin):
         self.router.add_api_route("/missilepk", self.missilepk, methods=["POST"])
         self.router.add_api_route("/stats", self.stats, methods=["POST"])
         self.app = app
-        cfg = self.locals[DEFAULT_TAG]
+        cfg = self.locals['configs'][0]
         self.config = Config(app=self.app, host=cfg['listen'], port=cfg['port'], log_level=logging.ERROR,
                              use_colors=False)
         self.server: uvicorn.Server = uvicorn.Server(config=self.config)
