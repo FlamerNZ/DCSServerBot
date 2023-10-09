@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 from discord import app_commands
 from discord.ext import tasks
 from discord.ui import Modal, TextInput
-from pathlib import Path
 from services import DCSServerBot
 from typing import Type, Optional, Literal
 
@@ -511,10 +510,10 @@ class Scheduler(Plugin):
         await server.rename(new_name, True)
         await interaction.response.send_message(f"Server {old_name} renamed to {new_name}.", ephemeral=True)
 
-    @group.command(description="Migrate a server from one instance to another")
+    @group.command(name="migrate", description="Migrate a server from one instance to another")
     @app_commands.guild_only()
     @utils.app_has_role('Admin')
-    async def migrate(self, interaction: discord.Interaction,
+    async def _migrate(self, interaction: discord.Interaction,
                       server: app_commands.Transform[Server, utils.ServerTransformer],
                       node: app_commands.Transform[Node, utils.NodeTransformer],
                       instance: app_commands.Transform[Instance, utils.InstanceTransformer]):
