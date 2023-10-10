@@ -68,18 +68,18 @@ class RestAPI(Plugin):
                     WHERE s.player_ucid = p.ucid 
                     GROUP BY 1 ORDER BY 4 DESC LIMIT 10
                 """).fetchall()
-
-    def is_time_between(begin_time, end_time, check_time=None):
-        # If check time is not given, default to current local time
-        check_time = check_time or datetime.now().time()
-        if begin_time < end_time:
-            return check_time >= begin_time and check_time <= end_time
-        else: # crosses midnight
-            return check_time >= begin_time or check_time <= end_time
     
     def servers(self):
+        def is_time_between(begin_time, end_time, check_time=None):
+            # If check time is not given, default to current local time
+            check_time = check_time or datetime.now().time()
+            if begin_time < end_time:
+                return check_time >= begin_time and check_time <= end_time
+            else: # crosses midnight
+                return check_time >= begin_time or check_time <= end_time
+
         servers_data = []
-    # get all servers, and their status, and add them to the servers_data list as JSON
+        # get all servers, and their status, and add them to the servers_data list as JSON
         scheduler = self.bot.cogs.get('Scheduler')
         for server in self.bot.servers.values():
             server_name = f"{server.name}"
@@ -114,16 +114,20 @@ class RestAPI(Plugin):
                 if 'restart' in config:
                     rconf = config['restart']
                     if 'local_times' in rconf:
-                        previous_t = time(23,59)
+                        previous_t = time(*[int(i) for i in rconf['local_times'][-1].split(':')])
                         for t in rconf['local_times']: 
                             t = time(*[int(i) for i in t.split(':')]) 
-                            if RestAPI.is_time_between(previous_t,t):
+                            if is_time_between(previous_t,t):
                                 now = datetime.now()
-                                seconds_till_restart = (timedelta(hours=24) - (now - now.replace(hour=t.hour, minute=t.minute, second=0, microsecond=0))).total_seconds() % (24 * 3600)
+                                seconds_till_restart = \
+                                    int((timedelta(hours=24) - \
+                                    (now - now.replace(hour=t.hour, minute=t.minute,\
+                                     second=0, microsecond=0))).total_seconds()\
+                                    % (24 * 3600))
                                 break
                             previous_t = t
                     elif 'mission_time' in rconf:
-                        seconds_till_restart =  rconf['mission_time'] * 60 - mission_time
+                        seconds_till_restart = int(rconf['mission_time'] * 60 - mission_time)
 
             if server.settings['password']:
                 password = server.settings['password']
@@ -141,7 +145,7 @@ class RestAPI(Plugin):
                     "mission_time": mission_time,
                     "password": password,
                     "server_maintenance": server_maintenance,
-                    "seconds_till_restart": int(seconds_till_restart)
+                    "seconds_till_restart": seconds_till_restart
                 },
                 "weather": weather
             }
