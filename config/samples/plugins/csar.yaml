@@ -1,0 +1,2 @@
+DEFAULT:
+  expire_after: 24 hours
