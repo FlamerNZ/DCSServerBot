@@ -1,4 +1,5 @@
 import json
+import time
 
 from psycopg.rows import dict_row
 from contextlib import closing
@@ -90,12 +91,30 @@ class CsarEventListener(EventListener):
         if not data:
             self.log.debug(f"CSAR: No wounded pilots in database")
             return
-        self.log.debug(json.dumps(data))
-        server.send_to_dcs({
-            'command': 'csarUpdatePersistentData',
-            'data': json.dumps(data)
-        })
-        return json.dumps(data)
+        i = 0
+        concat = ""
+        for row in data:
+            if concat == "":
+                concat = "[" + json.dumps(row)
+            else:
+                concat += ", " + json.dumps(row)
+            i += 1
+            if i >= 5:
+                concat += "]"
+                server.send_to_dcs({
+                    'command': 'csarUpdatePersistentData',
+                    'data': concat
+                })
+                concat = ""
+                i = 0
+                time.sleep(1)
+        if concat != "":
+            concat += "]"
+            server.send_to_dcs({
+                'command': 'csarUpdatePersistentData',
+                'data': concat
+            })
+        return
 
     @chat_command(name="csar", roles=['DCS Admin'], help="A sample command")
     async def csar(self, server: Server, player: Player, params: list[str]):

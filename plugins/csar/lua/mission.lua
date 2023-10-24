@@ -19,7 +19,7 @@ function dcsbot.csarStatData(data)
 	-- log.write('DCSServerBot', log.INFO, 'CSAR: csarStatData() (mission.lua)')
 	local msg = {}
 	msg.command = 'csarStatData'
-  json = net.lua2json(data)
+  local json = net.lua2json(data)
 	msg.data = json
   dcsbot.sendBotTable(msg)
 end
@@ -28,23 +28,23 @@ function dcsbot.csarSavePersistentData(data)
 	-- log.write('DCSServerBot', log.DEBUG, 'CSAR: savePersistentData() (mission.lua)')
 	local msg = {}
 	msg.command = 'csarSavePersistentData'
-  json = net.lua2json(data)
+  local json = net.lua2json(data)
 	msg.data = json
 	dcsbot.sendBotTable(msg)
 end
 
 function dcsbot.csarGetPersistentData(data)
-	-- log.write('DCSServerBot', log.DEBUG, 'CSAR: getPersistentData() (mission.lua)')
+	log.write('DCSServerBot', log.DEBUG, 'CSAR: getPersistentData() (mission.lua)')
 	local msg = {}
 	msg.command = 'csarGetPersistentData'
-  json = net.lua2json(data)
+  local json = net.lua2json(data)
 	msg.data = json
 	dcsbot.sendBotTable(msg)
 end
 
 function dcsbot._csarUpdatePersistentData(json)
-	-- log.write('DCSServerBot', log.DEBUG, 'CSAR: _csarUpdatePersistentData() (mission.lua)')
-	lua = net.json2lua(json)
+	log.write('DCSServerBot', log.DEBUG, 'CSAR: _csarUpdatePersistentData() (mission.lua)')
+	local lua = net.json2lua(json)
 	csar.spawnCsar(lua)
 end
 

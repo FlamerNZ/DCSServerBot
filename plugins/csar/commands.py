@@ -64,11 +64,10 @@ class Csar(Plugin):
             self.log.debug('CSAR: Pruning aged CSARS from DB')
             with self.pool.connection() as conn:
                 with conn.transaction():
-                    for d in self.csar_config:
-                        conn.execute("""
-                            DELETE FROM csar_wounded
-                            WHERE datestamp < now() - INTERVAL %s
-                        """, (d.expire_after))
+                    conn.execute("""
+                        DELETE FROM csar_wounded
+                        WHERE datestamp < NOW() - INTERVAL %s
+                    """, (self.csar_config))
 
 async def setup(bot: DCSServerBot):
     await bot.add_cog(Csar(bot, CsarEventListener))
