@@ -20,3 +20,4 @@ Scripts/net/DCSServerBot/DCSServerBotConfig.lua
 /fonts/
 /Music/
 /logs/
+.vscode/launch.json
