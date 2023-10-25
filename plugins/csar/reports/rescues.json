@@ -1,0 +1,13 @@
+{
+  "color": "blue",
+  "title": "CSAR Rescues for {name}",
+  "elements":
+  [
+    {
+      "type": "SQLTable",
+      "params": {
+        "sql": "SELECT helicopterused as \"Rescue Helicopter\", SUM(savedpilots) as \"Number of Rescued Pilots\" FROM csar_events WHERE ucid = %(ucid)s GROUP BY helicopterused ORDER BY helicopterused"
+      }
+    }
+  ]
+}

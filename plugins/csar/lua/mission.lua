@@ -48,4 +48,13 @@ function dcsbot._csarUpdatePersistentData(json)
 	csar.spawnCsar(lua)
 end
 
+function dcsbot.rescuedPilot(playername, typename, pilotname)
+	log.write('DCSServerBot', log.DEBUG, 'CSAR: rescuedPilot (mission.lua)')
+	msg.command = 'rescuedPilot'
+	msg.playername = playername
+	msg.typename = typename
+	msg.pilotname = pilotname 
+	dcsbot.sendBotTable(msg)
+end
+
 env.info("DCSServerBot - CSAR: mission.lua loaded.")

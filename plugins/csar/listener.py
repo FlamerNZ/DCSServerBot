@@ -46,9 +46,9 @@ class CsarEventListener(EventListener):
                         timestamps = stats[playername].keys()
                         for ts in timestamps:
                             conn.execute("""
-                                INSERT INTO csar_events (playername, ucid, savedpilots, helicopterused) 
-                                VALUES (%s, %s, %s, %s)
-                            """, (name, ucid, stats[playername][ts]['savedPilots'], stats[playername][ts]['helicopterUsed']))
+                                INSERT INTO csar_events (ts, playername, ucid, savedpilots, helicopterused) 
+                                VALUES (%s, %s, %s, %s, %s)
+                            """, (ts, name, ucid, stats[playername][ts]['savedPilots'], stats[playername][ts]['helicopterUsed']))
         return data
 
     @event(name="csarSavePersistentData")
@@ -119,3 +119,14 @@ class CsarEventListener(EventListener):
     @chat_command(name="csar", roles=['DCS Admin'], help="A sample command")
     async def csar(self, server: Server, player: Player, params: list[str]):
         player.sendChatMessage("This is a csar command!")
+
+    @event(name="rescuedPilot")
+    async def rescuedPilot(self, server: Server, data: dict):
+        self.log.debug(f"CSAR: A pilot was rescued!")
+        playername = data['playername']
+        unittype = data['unittype']
+        pilotname = data['pilotname']
+        ucid, name = self.bot.get_ucid_by_name(playername)
+        player: Player = server.get_player(id=ucid)
+        if player:
+            player.sendChatMessage("You have been rescued by {} flying a {}".format(pilotname, unittype))
