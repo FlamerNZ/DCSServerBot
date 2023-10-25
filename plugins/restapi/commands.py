@@ -52,10 +52,41 @@ class RestAPI(Plugin):
             with closing(conn.cursor(row_factory=dict_row)) as cursor:
                 return cursor.execute("""
                     SELECT p.name AS "fullNickname", SUM(pvp) AS "AAkills", SUM(deaths) AS "deaths", 
-                           CASE WHEN SUM(deaths) = 0 THEN SUM(pvp) ELSE SUM(pvp)/SUM(deaths::DECIMAL) END AS "AAKDR" 
-                    FROM statistics s, players p 
-                    WHERE s.player_ucid = p.ucid 
-                    GROUP BY 1 ORDER BY 2 DESC LIMIT 10
+                        CASE WHEN SUM(deaths) = 0 THEN SUM(pvp) ELSE SUM(pvp)/SUM(deaths::DECIMAL) END AS "AAKDR", 
+                        CASE WHEN (points) IS NULL THEN 0 ELSE points END AS points,
+						CASE WHEN (total_rescues) IS NULL THEN 0 ELSE total_rescues END AS total_rescues,
+						CASE WHEN (helicopterused) IS NULL THEN '' ELSE helicopterused END AS fav_chopper
+                    FROM statistics s
+                    LEFT JOIN players p ON s.player_ucid = p.ucid
+                    LEFT JOIN (
+                        SELECT init_id, 
+                            COALESCE(SUM(points),0) AS points
+                        FROM pu_events
+                        GROUP BY init_id 
+                    ) u ON s.player_ucid = u.init_id
+					LEFT JOIN (
+						SELECT ucid,
+						SUM(savedpilots) AS total_rescues
+						FROM csar_events c
+						GROUP BY ucid
+					) c on s.player_ucid = c.ucid
+					LEFT JOIN (
+						SELECT ucid, 
+							   savedpilots,
+							   helicopterused
+						FROM(
+							SELECT Row_Number() OVER(partition by ucid ORDER BY savedpilots DESC) AS 
+						   row_number, *
+						FROM (
+							SELECT ucid, helicopterused,
+							SUM(savedpilots) AS savedpilots
+							FROM csar_events
+							GROUP BY ucid, helicopterused
+							)
+						) 
+						 Where row_number = 1
+					) h on s.player_ucid = h.ucid
+                    GROUP BY 1, points, total_rescues, helicopterused ORDER BY points DESC LIMIT 10
                 """).fetchall()
 
     def topkdr(self):
