@@ -50,6 +50,7 @@ end
 
 function dcsbot.rescuedPilot(playername, typename, pilotname)
 	log.write('DCSServerBot', log.DEBUG, 'CSAR: rescuedPilot (mission.lua)')
+	local msg = {}
 	msg.command = 'rescuedPilot'
 	msg.playername = playername
 	msg.typename = typename
