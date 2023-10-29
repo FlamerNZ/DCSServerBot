@@ -4,7 +4,13 @@ local utils 	= base.require("DCSServerBotUtils")
 local config	= base.require("DCSServerBotConfig")
 
 local slotblock = slotblock or {}
+local slotsList = {}
 
+function dcsbot.blockSlot(playerName, typeName, block)
+    if playerName and typeName and block then
+        slotsList[playerName.."_"..typeName] = block
+    end
+end
 
 local function has_value(tab, value)
     if not tab then
@@ -67,6 +73,7 @@ end
 function slotblock.onPlayerTryChangeSlot(playerID, side, slotID)
     log.write('DCSServerBot', log.DEBUG, 'Slotblocking: onPlayerTryChangeSlot()')
     local player = net.get_player_info(playerID, 'ucid')
+    local player_name = net.get_player_info(playerID, 'name')
     local unit_name = DCS.getUnitProperty(slotID, DCS.UNIT_NAME)
     local group_name = DCS.getUnitProperty(slotID, DCS.UNIT_GROUPNAME)
     local unit_type = DCS.getUnitType(slotID)
@@ -74,6 +81,13 @@ function slotblock.onPlayerTryChangeSlot(playerID, side, slotID)
     if not dcsbot.params or not dcsbot.params['slotblocking'] or not dcsbot.params['slotblocking']['restricted'] then
         return
     end
+
+    if slotsList[player_name.."_"..unit_type] then
+        local message = 'You are out of lives for '..unit_type..', use a different aircraft or wait 24 hours or for someone to rescue your pilots.'
+        net.send_chat_to(message, playerID)
+        return false
+    end
+
     -- check levels if any
     for id, unit in pairs(dcsbot.params['slotblocking']['restricted']) do
         if (unit['unit_type'] and unit['unit_type'] == unit_type)
